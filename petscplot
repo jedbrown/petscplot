@@ -284,7 +284,7 @@ def plot_algorithmic(opts, logfiles):
     marker = itertools.cycle(list('osv^<>*D'))
     plotter = loglog
     if opts.legend_labels:
-        name = iter(opts.legend_labels)
+        name = iter(opts.legend_labels.split(':'))
     else:
         name = iter(l[0] for l in segment(logfiles))
     for logs in segment(logfiles):
