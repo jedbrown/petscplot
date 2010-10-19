@@ -1,0 +1,50 @@
+PETScPlot is a simple tool for plotting convergence rates and scalability from output logs of PETSc programs.
+
+Dependencies:
+
+python-2.5 or later: http://python.org
+numpy: http://numpy.org
+matplotlib: http://matplotlib.sourceforge.net
+funcparserlib: http://code.google.com/p/funcparserlib
+
+Usage:
+
+[Read the doc strings, they are more likely to be up-to-date.  Also run
+with -help.]
+
+Run your program with -{ksp,snes}_{monitor,converged_reason} and
+redirect the output into a file, perhaps for multiple problem sizes, or
+on different machines.  If you want timing information, also use
+-log_summary.
+
+Note: Currently the problem size parsing is specific to
+src/snes/examples/tutorials/ex48, it really needs to be made generic,
+but that requires the user to write a small code snippet to parse their
+header.
+
+Then pass series of log files to petscplot, as in the following examples.
+
+petscplot -t algorithmic foo{2,3,4,5,6}.log : bar{2,3,4,5,6}.log
+
+  Plots average number of Krylov iterations per nonlinear iteration
+  versus number of nodes, on a log-log scale.
+
+petscplot --type=algorithmic foo{2,3,4,5,6}.log : bar{2,3,4,5,6}.log \
+  --legend-labels='Foo Algorithm:Bar' --output=foobar.png
+
+  Uses the given legend (instead of first filename in each series) and
+  directs output to the PNG file.
+
+petscplot -t snes -m poster gridsequenced.log -o foobar.eps
+
+  Plots hybrid linear and nonlinear residuals for a grid-sequenced
+  simulation, formatted for placement on a poster, in EPS format (short
+  style options).
+
+petscplot -t weak SERIES [ : SERIES ] ...
+
+  Not implemented yet, but necessary data has been parsed.
+
+petscplot -t strong SERIES [ : SERIES ] ...
+
+  Not implemented yet, but necessary data has been parsed.
