@@ -10,6 +10,7 @@ from funcparserlib.contrib.common import sometok,unarg
 from funcparserlib.parser import maybe, many, oneplus, finished, skip, forward_decl, SyntaxError
 
 import pdb
+from IPython.Debugger import Tracer; debug_here = Tracer()
 
 class SNES(object):
     def __init__(self, indent, reason, res, level=None):
@@ -146,7 +147,8 @@ def parse(seq):
         return Event(name=s[0], count=int(s[1]), time=float(s[3]), flops=float(s[5]), Mflops=float(s[-1]))
     def mkStage(stageheader, events):
         name = re.match(r'^--- Event Stage \d+: (.*)', stageheader).groups()[0]
-        return Stage(name, events)
+        eventdict = dict((e.name,e) for e in events)
+        return Stage(name, eventdict)
     def mkOption(s):
         return re.match(r'^(-\w+)(?:\s+(.+))?$',s).groups()
     def mkRun(levels, solves, log):
@@ -184,9 +186,22 @@ def read_file(fname):
         s = f.read()
     return s
 
-def plot_loglog(arr,xcol,ycol,color,marker,name,loc):
-    x = arr[:,xcol]
-    y = arr[:,ycol]
+def fit_loglog(x, y, flag='mean'):
+    m,b = polyfit(log(x),log(y),1) # Linear fit
+    if flag == 'mean':
+        return exp(log(x)*m + b)
+    else:
+        raise RuntimeError('not implemented')
+def fit_ideal_loglog(x,y,slope):
+    xmin, ymin = log(x[0]), log(y[0])
+    b = ymin - xmin*slope;
+    ymax = log(y[-1])
+    xmax = (ymax - b)/slope     # Find the x associated with the rightmost data point
+    fit_x = array([xmin, xmax])
+    fit_y = fit_x*slope + b
+    return (exp(fit_x), exp(fit_y))
+
+def plot_loglog(x,y,color,marker,name,loc):
     rm,rb = polyfit(log(x),log(y),1)
     plot(x,exp(log(x)*rm+rb),color,linewidth=1)
     loglog(x,y,color[0]+marker,label='%s slope=%5.3f'%(name,rm),markersize=12)
@@ -275,19 +290,22 @@ def segment(logfiles):
            [['a', 'b'], ['c', 'd', 'e']]'''
     return filter(lambda x: x != [':'], groupBy(lambda x: x==':', logfiles))
 
+def name_segments(opts,logfiles):
+    if opts.legend_labels:
+        return iter(opts.legend_labels.split(':'))
+    else:
+        return iter(l[0] for l in segment(logfiles))
+
 def plot_algorithmic(opts, logfiles):
     '''Plots algorithmic scalability for several file series.  File
     series are separated by ':' (must be escaped from the shell).  Each
     file series is expected to be a list of log files with common
-    algorithm and increasing problem size.  The result is a log-linear
+    algorithm and increasing problem size.  The result is a log-log
     plot of iteration count for each series.
     '''
     marker = itertools.cycle(list('osv^<>*D'))
     plotter = loglog
-    if opts.legend_labels:
-        name = iter(opts.legend_labels.split(':'))
-    else:
-        name = iter(l[0] for l in segment(logfiles))
+    name = name_segments(opts,logfiles)
     for logs in segment(logfiles):
         series = [parse(tokenize(read_file(fname))) for fname in logs]
         if len(series) > 1:
@@ -301,8 +319,28 @@ def plot_algorithmic(opts, logfiles):
     xlabel('Number of nodes')
     legend(loc=(opts.legend_loc if opts.legend_loc else 'upper left'))
 
-def plot_strong(opts, logfiles):
-    ''
+def plot_strong(opts, logfiles, plotstage=3, plotevent='PCApply'):
+    '''Plots strong scalability given a list of log files.  The file
+    sequence should have a constant global problem size with increasing
+    numbers of processes The result is a log-log plot showing time to
+    solve the problem with successively more processes.'''
+    marker = itertools.cycle(list('osv^<>*D'))
+    plotter = loglog
+    name = name_segments(opts,logfiles)
+    for logs in segment(logfiles):
+        series = [parse(tokenize(read_file(fname))) for fname in logs]
+        series.sort(cmp=lambda a,b: cmp(a.np,b.np)) # Sort files in increasing order of number of processes
+        solves = [s.solves[-1] for s in series]
+        np = array([s.np for s in series])
+        time = array([r.stages[plotstage].events[plotevent].time for r in series])
+        #time_ideal = fit_loglog(np,time)
+        ideal_np, ideal_time = fit_ideal_loglog(np, time, slope=-1)
+        line = plotter(np,time,'-'+next(marker),label=('\\verb|%s|' % next(name)))
+        plotter(ideal_np,ideal_time,line[0].get_color())
+    xlabel('Number of processes')
+    ylabel('Time for \\texttt{\\protect{%s}} (seconds)' % plotevent)
+    legend(loc=(opts.legend_loc if opts.legend_loc else 'upper right'))
+    title('Strong scaling')
 
 def main():
     parser = OptionParser()
@@ -325,7 +363,7 @@ def main():
             raise RuntimeError('Suffix "%s" not recognized, use a recognized extension, or set manually with --format' % ext)
     print('Plotting %s using format %s from files: %s' % (opts.type, opts.format, ' '.join(logfiles)))
     if format: rcParams.update({'backend': format})
-    {'snes': plot_snes, 'algorithmic' : plot_algorithmic}[opts.type](opts, logfiles)
+    {'snes': plot_snes, 'algorithmic' : plot_algorithmic, 'strong' : plot_strong}[opts.type](opts, logfiles)
     if opts.output:
         savefig(opts.output)
     else:
