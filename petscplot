@@ -1,7 +1,6 @@
 #!/usr/bin/env python2
 # -*- mode: Python -*-
 
-from optparse import OptionParser
 from pylab import *
 import pprint, re, itertools, os.path
 from collections import namedtuple
@@ -294,7 +293,7 @@ def name_segments(opts,logfiles):
     if opts.legend_labels:
         return iter(opts.legend_labels.split(':'))
     else:
-        return iter(l[0] for l in segment(logfiles))
+        return iter(('\\verb|%s|' % l[0]) for l in segment(logfiles))
 
 def plot_algorithmic(opts, logfiles):
     '''Plots algorithmic scalability for several file series.  File
@@ -319,39 +318,54 @@ def plot_algorithmic(opts, logfiles):
     xlabel('Number of nodes')
     legend(loc=(opts.legend_loc if opts.legend_loc else 'upper left'))
 
-def plot_strong(opts, logfiles, plotstage=3, plotevent='PCApply'):
+def plot_strong(opts, logfiles):
     '''Plots strong scalability given a list of log files.  The file
     sequence should have a constant global problem size with increasing
     numbers of processes The result is a log-log plot showing time to
     solve the problem with successively more processes.'''
     marker = itertools.cycle(list('osv^<>*D'))
     plotter = loglog
+    (plotstage,) = opts.stages
+    (plotevent,) = opts.events
     name = name_segments(opts,logfiles)
+    allx = array([])
+    ally = array([])
     for logs in segment(logfiles):
         series = [parse(tokenize(read_file(fname))) for fname in logs]
         series.sort(cmp=lambda a,b: cmp(a.np,b.np)) # Sort files in increasing order of number of processes
         solves = [s.solves[-1] for s in series]
         np = array([s.np for s in series])
         time = array([r.stages[plotstage].events[plotevent].time for r in series])
-        #time_ideal = fit_loglog(np,time)
+        allx, ally = concatenate((allx,np)), concatenate((ally,time))
         ideal_np, ideal_time = fit_ideal_loglog(np, time, slope=-1)
-        line = plotter(np,time,'-'+next(marker),label=('\\verb|%s|' % next(name)))
+        line = plotter(np,time,'-'+next(marker),label=next(name))
         plotter(ideal_np,ideal_time,line[0].get_color())
+    xlim(min(allx)*0.9, max(allx)*1.1)
+    ylim(min(ally)*0.9, max(ally)*1.1)
     xlabel('Number of processes')
-    ylabel('Time for \\texttt{\\protect{%s}} (seconds)' % plotevent)
+    ylabel('Time (seconds)')
     legend(loc=(opts.legend_loc if opts.legend_loc else 'upper right'))
-    title('Strong scaling')
+    title('Strong scaling (\\texttt{%s})' % ', '.join(opts.events))
+
+def splitlist(sep, build):
+    def constructor(string):
+        return [build(x) for x in string.split(sep)]
+    return constructor
 
 def main():
-    parser = OptionParser()
-    parser.add_option('-f', '--format', help='|png|jpg|eps', dest='format', type='string', default=None)
-    parser.add_option('-m', '--mode', help='talk|poster|paper', dest='mode', type='string', default='talk')
-    parser.add_option('-t', '--type', help='snes|algorithmic|weak|strong', dest='type', type='string', default='snes')
-    parser.add_option('-o', '--output', help='Output filename', dest='output', default=None)
-    parser.add_option('--legend-labels', help='Labels for each item being plotted', dest='legend_labels', default=None)
-    parser.add_option('--legend-loc', help='Location of legend (e.g. "upper left")', dest='legend_loc')
-    parser.add_option('--solve-spec', help='Which solves to use out of each model run (e.g. "1:")', dest='solve_spec', default='0:')
-    opts, logfiles = parser.parse_args()
+    import argparse
+    parser = argparse.ArgumentParser(description='Plot analytics on PETSc program output')
+    parser.add_argument('-f', '--format', choices='native png jpg eps pdf'.split(), help='Output format for plotting', dest='format', type=str, default='native')
+    parser.add_argument('-m', '--mode', choices='talk poster paper'.split(), help='Formatting mode, affects weights and fonts', dest='mode', type=str, default='talk')
+    parser.add_argument('-t', '--type', choices='snes algorithmic weak strong'.split(), help='Plot type', dest='type', type=str, default='snes')
+    parser.add_argument('-o', '--output', help='Output filename', dest='output', default=None)
+    parser.add_argument('--legend-labels', help='Labels for each item being plotted, colon (:) separated', dest='legend_labels', default=None)
+    parser.add_argument('--legend-loc', help='Location of legend (e.g. "upper left")', dest='legend_loc')
+    parser.add_argument('--solve-spec', help='Which solves to use out of each model run (e.g. "1:")', dest='solve_spec', default='0:')
+    parser.add_argument('--stages', help='Which stage to look at for timing numbers (colon-separated list)', dest='stages', type=splitlist(':',int), default='-1')
+    parser.add_argument('--events', help='Which events to look at for timing (colon-separated list)', dest='events', type=splitlist(':',str), default='SNESSolve')
+    parser.add_argument('logfiles', nargs='+', type=str, help='List of files to process, usually with -log_summary')
+    opts = parser.parse_args()
 
     {'talk' : set_sizes_talk, 'poster' : set_sizes_poster, 'paper' : set_sizes_paper}[opts.mode]()
     if opts.output and not opts.format:
@@ -361,9 +375,9 @@ def main():
             opts.format = supported[ext]
         else:
             raise RuntimeError('Suffix "%s" not recognized, use a recognized extension, or set manually with --format' % ext)
-    print('Plotting %s using format %s from files: %s' % (opts.type, opts.format, ' '.join(logfiles)))
-    if format: rcParams.update({'backend': format})
-    {'snes': plot_snes, 'algorithmic' : plot_algorithmic, 'strong' : plot_strong}[opts.type](opts, logfiles)
+    print('Plotting %s using format %s from files: %s' % (opts.type, opts.format, ' '.join(opts.logfiles)))
+    if format != 'native': rcParams.update({'backend': format})
+    {'snes': plot_snes, 'algorithmic' : plot_algorithmic, 'strong' : plot_strong}[opts.type](opts, opts.logfiles)
     if opts.output:
         savefig(opts.output)
     else:
