@@ -292,8 +292,12 @@ def segment(logfiles):
 def name_segments(opts,logfiles):
     if opts.legend_labels:
         return iter(opts.legend_labels)
-    else:
+    elif opts.series_labels:
+        return iter(opts.series_labels)
+    elif opts.series_labels == []:
         return iter(('\\verb|%s|' % l[0]) for l in segment(logfiles))
+    else:
+        return iter('' for l in segment(logfiles))
 
 def plot_algorithmic(opts, logfiles):
     '''Plots algorithmic scalability for several file series.  File
@@ -353,24 +357,29 @@ def plot_strong(opts, logfiles):
 def plot_weak(opts, logfiles):
     marker = itertools.cycle(list('osv^<>*D'))
     (plotstage,) = opts.stages
-    (plotevent,) = opts.events
-    name = name_segments(opts,logfiles)
+    plotevents = opts.events
+    names = list(name_segments(opts,logfiles))
+    barwidth = 0.2
+    colors = 'rgbm'
     allx = array([])
     ally = array([])
-    for logs in segment(logfiles):
+    for i,logs in enumerate(segment(logfiles)):
         series = [parse(tokenize(read_file(fname))) for fname in logs]
         series.sort(cmp=lambda a,b: cmp(a.np,b.np)) # Sort files in increasing order of number of processes
         solves = [s.solves[-1] for s in series]
         np = array([s.np for s in series])
-        def timeperevent(event):
-            return event.time #/event.count
-        time = array([timeperevent(r.stages[plotstage].events[plotevent]) for r in series])
-        allx, ally = concatenate((allx,np)), concatenate((ally,time))
-        ideal_np = array([np[0], np[-1]])
-        ideal_time = array([time[0], time[0]])
-        line = semilogx(np,time,'-'+next(marker),label=next(name))
-        #semilogx(ideal_np,ideal_time,line[0].get_color())
-    xlim(min(allx)*0.9, max(allx)*1.1)
+        lastline = None
+        seriesname = names[i]
+        bottom = zeros(len(np))
+        xvalues = arange(len(np)) + i*barwidth
+        for j,event in enumerate(plotevents):
+            time = array([r.stages[plotstage].events[event].time for r in series])
+            lastline = bar(xvalues, time, label=seriesname+event, width=barwidth, color=colors[j], bottom=bottom)
+            ally = concatenate((ally,time))
+            bottom += time
+        allx = concatenate((allx,np))
+        xticks(xvalues+barwidth/2, map(str,np))
+    #xlim(min(allx)*0.9, max(allx)*1.1)
     ylim(min(ally)*0.9, max(ally)*1.1)
     xlabel('Number of processes')
     ylabel('Time (seconds)')
@@ -394,6 +403,7 @@ def main():
     parser.add_argument('-o', '--output', help='Output filename', dest='output', default=None)
     parser.add_argument('--legend-labels', help='Labels for each item being plotted, colon (:) separated', dest='legend_labels', type=splitlist(':',str), default=None)
     parser.add_argument('--legend-loc', help='Location of legend (e.g. "upper left")', dest='legend_loc')
+    parser.add_argument('--series-labels', help='Labels for each series, legend labels are created from series labels', dest='series_labels', type=splitlist(':',str), default=None)
     parser.add_argument('--solve-spec', help='Which solves to use out of each model run (e.g. "1:")', dest='solve_spec', default='0:')
     parser.add_argument('--stages', help='Which stage to look at for timing numbers (colon-separated list)', dest='stages', type=splitlist(':',int), default='-1')
     parser.add_argument('--events', help='Which events to look at for timing (colon-separated list)', dest='events', type=splitlist(':',str), default='SNESSolve')
