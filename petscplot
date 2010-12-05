@@ -207,10 +207,14 @@ def plot_loglog(x,y,color,marker,name,loc):
     #text(3.5e6,loc,'slope=%5.3f'%rm)
     #text(3.5e6,loc,'slope=%5.3f'%rm)
 
-def set_sizes_talk():
-    golden = (sqrt(5)-1)/2
-    fig_width = 13;
-    fig_size = (fig_width,fig_width*golden)
+def get_dims(args, dflt_width, ratio=(sqrt(5)-1)/2):
+    inches_per_pt = 1/72.27
+    width = inches_per_pt * (args.width_pt if args.width_pt else dflt_width)
+    height = width * ratio
+    return width, height
+
+def set_sizes_talk(opts):
+    fig_size = get_dims(opts, 900)
     rcParams.update({'axes.titlesize': 18,
                      'axes.labelsize': 18,
                      'text.fontsize': 24,
@@ -222,10 +226,8 @@ def set_sizes_talk():
                      'figure.figsize': fig_size})
     subplots_adjust(left=0.08,right=0.975,bottom=0.08,top=0.94)
 
-def set_sizes_poster():
-    golden = (sqrt(5)-1)/2
-    fig_width = 10;
-    fig_size = (fig_width,fig_width*golden)
+def set_sizes_poster(opts):
+    fig_size = get_dims(opts, 720)
     rcParams.update({'axes.titlesize': 18,
                      'axes.labelsize': 18,
                      'text.fontsize': 24,
@@ -238,21 +240,19 @@ def set_sizes_poster():
                      'figure.figsize': fig_size})
     subplots_adjust(left=0.09,right=0.975,bottom=0.11,top=0.93)
 
-def set_sizes_paper():
-    golden = (sqrt(5)-1)/2
-    fig_width = 8;
-    fig_size = (fig_width,fig_width*golden)
-    rcParams.update({'axes.titlesize': 16,
-                     'axes.labelsize': 16,
-                     'text.fontsize': 16,
-                     'lines.linewidth': 3,
-                     'legend.fontsize': 16,
+def set_sizes_paper(opts):
+    fig_size = get_dims(opts, 324)
+    rcParams.update({'axes.titlesize': 11,
+                     'axes.labelsize': 9,
+                     'text.fontsize': 9,
+                     'lines.linewidth': 1,
+                     'legend.fontsize': 9,
                      #'legend.markerscale' : 8,
-                     'xtick.labelsize': 16,
-                     'ytick.labelsize': 16,
+                     'xtick.labelsize': 8,
+                     'ytick.labelsize': 8,
                      'text.usetex': True,
                      'figure.figsize': fig_size})
-    subplots_adjust(left=0.09,right=0.975,bottom=0.11,top=0.93)
+    subplots_adjust(left=0.12,right=0.975,bottom=0.15,top=0.93)
 
 def plot_snes_convergence(solves, sequence=False, withksp=False, legend_loc='lower left'):
     marker = itertools.cycle(list('osv^<>*D'))
@@ -291,7 +291,7 @@ def segment(logfiles):
 
 def name_segments(opts,logfiles):
     if opts.legend_labels:
-        return iter(opts.legend_labels.split(':'))
+        return iter(opts.legend_labels)
     else:
         return iter(('\\verb|%s|' % l[0]) for l in segment(logfiles))
 
@@ -314,7 +314,7 @@ def plot_algorithmic(opts, logfiles):
             solves = series[0].solves
         its = array([(s.level.count, mean([len(r.ksp.res) for r in s.res][:-1])) for s in solves])
         plotter(its[:,0],its[:,1],'-'+next(marker),label=next(name))
-    ylabel('Average Krylov iterations per nonlinear iteration (rtol $10^{-2})')
+    ylabel('Krylov its. per nonlinear (rtol $10^{-2}$)')
     xlabel('Number of nodes')
     legend(loc=(opts.legend_loc if opts.legend_loc else 'upper left'))
 
@@ -345,7 +345,40 @@ def plot_strong(opts, logfiles):
     xlabel('Number of processes')
     ylabel('Time (seconds)')
     legend(loc=(opts.legend_loc if opts.legend_loc else 'upper right'))
-    title('Strong scaling (\\texttt{%s})' % ', '.join(opts.events))
+    if opts.title is None:
+        title('Strong scaling (\\texttt{%s})' % ', '.join(opts.events))
+    elif opts.title:
+        title(opts.title)
+
+def plot_weak(opts, logfiles):
+    marker = itertools.cycle(list('osv^<>*D'))
+    (plotstage,) = opts.stages
+    (plotevent,) = opts.events
+    name = name_segments(opts,logfiles)
+    allx = array([])
+    ally = array([])
+    for logs in segment(logfiles):
+        series = [parse(tokenize(read_file(fname))) for fname in logs]
+        series.sort(cmp=lambda a,b: cmp(a.np,b.np)) # Sort files in increasing order of number of processes
+        solves = [s.solves[-1] for s in series]
+        np = array([s.np for s in series])
+        def timeperevent(event):
+            return event.time #/event.count
+        time = array([timeperevent(r.stages[plotstage].events[plotevent]) for r in series])
+        allx, ally = concatenate((allx,np)), concatenate((ally,time))
+        ideal_np = array([np[0], np[-1]])
+        ideal_time = array([time[0], time[0]])
+        line = semilogx(np,time,'-'+next(marker),label=next(name))
+        #semilogx(ideal_np,ideal_time,line[0].get_color())
+    xlim(min(allx)*0.9, max(allx)*1.1)
+    ylim(min(ally)*0.9, max(ally)*1.1)
+    xlabel('Number of processes')
+    ylabel('Time (seconds)')
+    legend(loc=(opts.legend_loc if opts.legend_loc else 'upper left'))
+    if opts.title is None:
+        title('Weak scaling (\\texttt{%s})' % ', '.join(opts.events))
+    elif opts.title:
+        title(opts.title)
 
 def splitlist(sep, build):
     def constructor(string):
@@ -355,29 +388,35 @@ def splitlist(sep, build):
 def main():
     import argparse
     parser = argparse.ArgumentParser(description='Plot analytics on PETSc program output')
-    parser.add_argument('-f', '--format', choices='native png jpg eps pdf'.split(), help='Output format for plotting', dest='format', type=str, default='native')
+    parser.add_argument('-f', '--format', choices='native png jpg eps pdf'.split(), help='Output format for plotting', dest='format', type=str, default=None)
     parser.add_argument('-m', '--mode', choices='talk poster paper'.split(), help='Formatting mode, affects weights and fonts', dest='mode', type=str, default='talk')
     parser.add_argument('-t', '--type', choices='snes algorithmic weak strong'.split(), help='Plot type', dest='type', type=str, default='snes')
     parser.add_argument('-o', '--output', help='Output filename', dest='output', default=None)
-    parser.add_argument('--legend-labels', help='Labels for each item being plotted, colon (:) separated', dest='legend_labels', default=None)
+    parser.add_argument('--legend-labels', help='Labels for each item being plotted, colon (:) separated', dest='legend_labels', type=splitlist(':',str), default=None)
     parser.add_argument('--legend-loc', help='Location of legend (e.g. "upper left")', dest='legend_loc')
     parser.add_argument('--solve-spec', help='Which solves to use out of each model run (e.g. "1:")', dest='solve_spec', default='0:')
     parser.add_argument('--stages', help='Which stage to look at for timing numbers (colon-separated list)', dest='stages', type=splitlist(':',int), default='-1')
     parser.add_argument('--events', help='Which events to look at for timing (colon-separated list)', dest='events', type=splitlist(':',str), default='SNESSolve')
+    parser.add_argument('--width-pt', help='Width, in LaTeX points, of the figure', dest='width_pt', type=float, default=None)
+    parser.add_argument('--title', help='Set the figure title', dest='title', type=str, default=None)
     parser.add_argument('logfiles', nargs='+', type=str, help='List of files to process, usually with -log_summary')
     opts = parser.parse_args()
 
-    {'talk' : set_sizes_talk, 'poster' : set_sizes_poster, 'paper' : set_sizes_paper}[opts.mode]()
+    {'talk' : set_sizes_talk, 'poster' : set_sizes_poster, 'paper' : set_sizes_paper}[opts.mode](opts)
     if opts.output and not opts.format:
         ext = os.path.splitext(opts.output)[1]
-        supported = {'.png':'png', '.jpg':'jpg', '.eps':'eps'}
+        supported = {'.png':'png', '.jpg':'jpg', '.eps':'eps', '.pdf':'pdf'}
         if ext in supported:
             opts.format = supported[ext]
         else:
             raise RuntimeError('Suffix "%s" not recognized, use a recognized extension, or set manually with --format' % ext)
     print('Plotting %s using format %s from files: %s' % (opts.type, opts.format, ' '.join(opts.logfiles)))
     if format != 'native': rcParams.update({'backend': format})
-    {'snes': plot_snes, 'algorithmic' : plot_algorithmic, 'strong' : plot_strong}[opts.type](opts, opts.logfiles)
+    {'snes': plot_snes,
+     'algorithmic' : plot_algorithmic,
+     'strong' : plot_strong,
+     'weak' : plot_weak
+     }[opts.type](opts, opts.logfiles)
     if opts.output:
         savefig(opts.output)
     else:
