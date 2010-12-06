@@ -2,14 +2,13 @@
 # -*- mode: Python -*-
 
 from pylab import *
-import pprint, re, itertools, os.path
+import pprint, re, itertools, os.path, locale
 from collections import namedtuple
 from funcparserlib.lexer import Spec, make_tokenizer
 from funcparserlib.contrib.common import sometok,unarg
 from funcparserlib.parser import maybe, many, oneplus, finished, skip, forward_decl, SyntaxError
 
-import pdb
-from IPython.Debugger import Tracer; debug_here = Tracer()
+#from IPython.Debugger import Tracer; debug_here = Tracer()
 
 class SNES(object):
     def __init__(self, indent, reason, res, level=None):
@@ -22,7 +21,7 @@ class SNES(object):
         if name:
             self._name = name
         elif self.level:
-            return 'Level %d (%d nodes)'%(self.level.level, self.level.count)
+            return 'Level %d (%s nodes)' % (self.level.level, locale.format("%d",self.level.count,grouping=True))
         else:
             return 'Unknown'
     def __repr__(self):
