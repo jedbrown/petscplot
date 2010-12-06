@@ -2,10 +2,9 @@ PETScPlot is a simple tool for plotting convergence rates and scalability from o
 
 Dependencies:
 
-python-2.7 (or python-2.5 plus argparse): http://python.org
+python-2.5 or later: http://python.org
 numpy: http://numpy.org
 matplotlib: http://matplotlib.sourceforge.net
-funcparserlib: http://code.google.com/p/funcparserlib
 
 Usage:
 

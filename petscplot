@@ -395,20 +395,55 @@ def splitlist(sep, build):
     return constructor
 
 def main():
-    import argparse
-    parser = argparse.ArgumentParser(description='Plot analytics on PETSc program output')
-    parser.add_argument('-f', '--format', choices='native png jpg eps pdf'.split(), help='Output format for plotting', dest='format', type=str, default=None)
-    parser.add_argument('-m', '--mode', choices='talk poster paper'.split(), help='Formatting mode, affects weights and fonts', dest='mode', type=str, default='talk')
-    parser.add_argument('-t', '--type', choices='snes algorithmic weak strong'.split(), help='Plot type', dest='type', type=str, default='snes')
-    parser.add_argument('-o', '--output', help='Output filename', dest='output', default=None)
-    parser.add_argument('--legend-labels', help='Labels for each item being plotted, colon (:) separated', dest='legend_labels', type=splitlist(':',str), default=None)
+    try:
+        from argparse import ArgumentParser
+    except(ImportError):
+        from optparse import OptionParser
+        class ArgumentParser(OptionParser):
+            def __init__(self,*args,**kwargs):
+                self.pairs = dict()
+                return OptionParser.__init__(self,*args,**kwargs)
+            def add_argument(self, *args, **kwargs):
+                if 'type' in kwargs:
+                    thetype = kwargs['type']
+                    if thetype == str:
+                        kwargs['type'] = 'string'
+                    elif thetype == int:
+                        kwargs['type'] = 'int'
+                    elif thetype == float:
+                        kwargs['type'] = 'float'
+                    else:
+                        def thecallback(option, opt, value, parser):
+                            if value is not None:
+                                setattr(parser.values,option.dest,thetype(value))
+                        kwargs['type'] = 'string'
+                        if 'default' in kwargs and kwargs['default'] is not None:
+                            kwargs['default'] = thetype(kwargs['default'])
+                        kwargs.update(dict(action='callback', callback=thecallback))
+                if 'nargs' in kwargs: # Only supports one nargs option
+                    self.nargskey = args[0]
+                    kwargs['dest'] = self.nargskey
+                    return
+                self.pairs[kwargs['dest']] = kwargs.get('default',None)
+                return OptionParser.add_option(self, *args, **kwargs)
+            def parse_args(self):
+                args, nargs = OptionParser.parse_args(self)
+                setattr(args, self.nargskey, nargs)
+                return args
+
+    parser = ArgumentParser(description='Plot analytics on PETSc program output')
+    parser.add_argument('-f', '--format', choices='native png jpg eps pdf'.split(), help='Output format for plotting', dest='format')
+    parser.add_argument('-m', '--mode', choices='talk poster paper'.split(), help='Formatting mode, affects weights and fonts', dest='mode', default='talk')
+    parser.add_argument('-t', '--type', choices='snes algorithmic weak strong'.split(), help='Plot type', dest='type', default='snes')
+    parser.add_argument('-o', '--output', help='Output filename', dest='output')
+    parser.add_argument('--legend-labels', help='Labels for each item being plotted, colon (:) separated', dest='legend_labels', type=splitlist(':',str))
     parser.add_argument('--legend-loc', help='Location of legend (e.g. "upper left")', dest='legend_loc')
-    parser.add_argument('--series-labels', help='Labels for each series, legend labels are created from series labels', dest='series_labels', type=splitlist(':',str), default=None)
+    parser.add_argument('--series-labels', help='Labels for each series, legend labels are created from series labels', dest='series_labels', type=splitlist(':',str))
     parser.add_argument('--solve-spec', help='Which solves to use out of each model run (e.g. "1:")', dest='solve_spec', default='0:')
     parser.add_argument('--stages', help='Which stage to look at for timing numbers (colon-separated list)', dest='stages', type=splitlist(':',int), default='-1')
     parser.add_argument('--events', help='Which events to look at for timing (colon-separated list)', dest='events', type=splitlist(':',str), default='SNESSolve')
-    parser.add_argument('--width-pt', help='Width, in LaTeX points, of the figure', dest='width_pt', type=float, default=None)
-    parser.add_argument('--title', help='Set the figure title', dest='title', type=str, default=None)
+    parser.add_argument('--width-pt', help='Width, in LaTeX points, of the figure', dest='width_pt', type=float)
+    parser.add_argument('--title', help='Set the figure title', dest='title', type=str)
     parser.add_argument('logfiles', nargs='+', type=str, help='List of files to process, usually with -log_summary')
     opts = parser.parse_args()
 
