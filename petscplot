@@ -373,7 +373,8 @@ def plot_weak(opts, logfiles):
         xvalues = arange(len(np)) + i*barwidth
         for j,event in enumerate(plotevents):
             time = array([r.stages[plotstage].events[event].time for r in series])
-            lastline = bar(xvalues, time, label=seriesname+event, width=barwidth, color=colors[j], bottom=bottom)
+            lastline = bar(xvalues, time, label='%s \\texttt{%s}'%(seriesname,event),
+                           width=barwidth, color=colors[j], bottom=bottom)
             ally = concatenate((ally,time))
             bottom += time
         allx = concatenate((allx,np))
