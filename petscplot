@@ -346,13 +346,14 @@ def plot_strong(opts, logfiles):
         else:
             line = loglog(np,time,'-'+next(marker),label=next(name))
             loglog(ideal_np,ideal_time,line[0].get_color())
-    xlim(min(allx)*0.7, max(allx)*1.1)
+    xlim(min(allx)*0.7 if opts.xmin is None else opts.xmin,
+         max(allx)*1.1 if opts.xmax is None else opts.xmax)
     xlabel('Number of processes')
     if opts.efficiency:
         ylim(0,1.2)
         ylabel('Parallel efficiency')
     else:
-        ylim(min(ally)*0.9, max(ally)*1.1)
+        ylim(min(ally)*0.8, max(ally)*1.1)
         ylabel('Time (seconds)')
     legend(loc=(opts.legend_loc if opts.legend_loc else 'upper right'), frameon=False)
     if opts.title is None:
@@ -386,7 +387,6 @@ def plot_weak(opts, logfiles):
         ally = concatenate((ally,bottom))
         allx = concatenate((allx,np))
         xticks(xvalues+barwidth/2, map(str,np))
-    #xlim(min(allx)*0.9, max(allx)*1.1)
     ylim(0, max(ally)*1.1)
     xlabel('Number of processes')
     ylabel('Time (seconds)')
@@ -454,6 +454,8 @@ def main():
     parser.add_argument('--width-pt', help='Width, in LaTeX points, of the figure', dest='width_pt', type=float)
     parser.add_argument('--title', help='Set the figure title', dest='title', type=str)
     parser.add_argument('--efficiency', help='Plot parallel efficiency instead of a log-log representation', dest='efficiency', action='store_true')
+    parser.add_argument('--xmin', dest='xmin', type=float)
+    parser.add_argument('--xmax', dest='xmax', type=float)
     parser.add_argument('logfiles', nargs='+', type=str, help='List of files to process, usually with -log_summary')
     opts = parser.parse_args()
 
