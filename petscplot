@@ -195,7 +195,7 @@ def fit_ideal_loglog(x,y,slope):
     b = ymin - xmin*slope;
     ymax = log(y[-1])
     xmax = (ymax - b)/slope     # Find the x associated with the rightmost data point
-    fit_x = array([xmin, xmax])
+    fit_x = log(x) #array([xmin, xmax])
     fit_y = fit_x*slope + b
     return (exp(fit_x), exp(fit_y))
 
@@ -226,15 +226,15 @@ def set_sizes_talk(opts):
     subplots_adjust(left=0.08,right=0.975,bottom=0.08,top=0.94)
 
 def set_sizes_poster(opts):
-    fig_size = get_dims(opts, 720)
-    rcParams.update({'axes.titlesize': 18,
-                     'axes.labelsize': 18,
-                     'text.fontsize': 24,
+    fig_size = get_dims(opts, 1240)
+    rcParams.update({'axes.titlesize': 24,
+                     'axes.labelsize': 24,
+                     'text.fontsize': 32,
                      'lines.linewidth': 3,
-                     'legend.fontsize': 16,
-                     #'legend.markerscale' : 8,
-                     'xtick.labelsize': 18,
-                     'ytick.labelsize': 18,
+                     'lines.markersize': 10,
+                     'legend.fontsize': 24,
+                     'xtick.labelsize': 24,
+                     'ytick.labelsize': 24,
                      'text.usetex': True,
                      'figure.figsize': fig_size})
     subplots_adjust(left=0.09,right=0.975,bottom=0.11,top=0.93)
@@ -327,7 +327,6 @@ def plot_strong(opts, logfiles):
     numbers of processes The result is a log-log plot showing time to
     solve the problem with successively more processes.'''
     marker = itertools.cycle(list('osv^<>*D'))
-    plotter = loglog
     (plotstage,) = opts.stages
     (plotevent,) = opts.events
     name = name_segments(opts,logfiles)
@@ -341,13 +340,21 @@ def plot_strong(opts, logfiles):
         time = array([r.stages[plotstage].events[plotevent].time for r in series])
         allx, ally = concatenate((allx,np)), concatenate((ally,time))
         ideal_np, ideal_time = fit_ideal_loglog(np, time, slope=-1)
-        line = plotter(np,time,'-'+next(marker),label=next(name))
-        plotter(ideal_np,ideal_time,line[0].get_color())
-    xlim(min(allx)*0.9, max(allx)*1.1)
-    ylim(min(ally)*0.9, max(ally)*1.1)
+        if opts.efficiency:
+            eff = ideal_time / time
+            semilogx(np,eff,'-'+next(marker),label=next(name))
+        else:
+            line = loglog(np,time,'-'+next(marker),label=next(name))
+            loglog(ideal_np,ideal_time,line[0].get_color())
+    xlim(min(allx)*0.7, max(allx)*1.1)
     xlabel('Number of processes')
-    ylabel('Time (seconds)')
-    legend(loc=(opts.legend_loc if opts.legend_loc else 'upper right'))
+    if opts.efficiency:
+        ylim(0,1.2)
+        ylabel('Parallel efficiency')
+    else:
+        ylim(min(ally)*0.9, max(ally)*1.1)
+        ylabel('Time (seconds)')
+    legend(loc=(opts.legend_loc if opts.legend_loc else 'upper right'), frameon=False)
     if opts.title is None:
         title('Strong scaling (\\texttt{%s})' % ', '.join(opts.events))
     elif opts.title:
@@ -359,7 +366,7 @@ def plot_weak(opts, logfiles):
     plotevents = opts.events
     names = list(name_segments(opts,logfiles))
     barwidth = 0.2
-    colors = 'rgbm'
+    colors = 'rgbmc'
     allx = array([])
     ally = array([])
     for i,logs in enumerate(segment(logfiles)):
@@ -375,12 +382,12 @@ def plot_weak(opts, logfiles):
             time = array([r.stages[plotstage].events[event].time for r in series])
             lastline = bar(xvalues, time, label='%s \\texttt{%s}'%(seriesname,event),
                            width=barwidth, color=colors[j], bottom=bottom)
-            ally = concatenate((ally,time))
             bottom += time
+        ally = concatenate((ally,bottom))
         allx = concatenate((allx,np))
         xticks(xvalues+barwidth/2, map(str,np))
     #xlim(min(allx)*0.9, max(allx)*1.1)
-    ylim(min(ally)*0.9, max(ally)*1.1)
+    ylim(0, max(ally)*1.1)
     xlabel('Number of processes')
     ylabel('Time (seconds)')
     legend(loc=(opts.legend_loc if opts.legend_loc else 'upper left'))
@@ -412,6 +419,8 @@ def main():
                         kwargs['type'] = 'int'
                     elif thetype == float:
                         kwargs['type'] = 'float'
+                    elif thetype == bool:
+                        kwargs['type'] = 'bool'
                     else:
                         def thecallback(option, opt, value, parser):
                             if value is not None:
@@ -444,6 +453,7 @@ def main():
     parser.add_argument('--events', help='Which events to look at for timing (colon-separated list)', dest='events', type=splitlist(':',str), default='SNESSolve')
     parser.add_argument('--width-pt', help='Width, in LaTeX points, of the figure', dest='width_pt', type=float)
     parser.add_argument('--title', help='Set the figure title', dest='title', type=str)
+    parser.add_argument('--efficiency', help='Plot parallel efficiency instead of a log-log representation', dest='efficiency', action='store_true')
     parser.add_argument('logfiles', nargs='+', type=str, help='List of files to process, usually with -log_summary')
     opts = parser.parse_args()
 
