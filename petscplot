@@ -362,6 +362,11 @@ def plot_strong(opts, logfiles):
         title(opts.title)
 
 def plot_weak(opts, logfiles):
+    def event_label(seriesname,event):
+        if opts.legend_labels:
+            return opts.legend_labels.pop(0)
+        else:
+            return '%s \\texttt{%s}'%(seriesname,event)
     marker = itertools.cycle(list('osv^<>*D'))
     (plotstage,) = opts.stages
     plotevents = opts.events
@@ -381,7 +386,7 @@ def plot_weak(opts, logfiles):
         xvalues = arange(len(np)) + i*barwidth
         for j,event in enumerate(plotevents):
             time = array([r.stages[plotstage].events[event].time for r in series])
-            lastline = bar(xvalues, time, label='%s \\texttt{%s}'%(seriesname,event),
+            lastline = bar(xvalues, time, label=event_label(seriesname,event),
                            width=barwidth, color=colors[j], bottom=bottom)
             bottom += time
         ally = concatenate((ally,bottom))
