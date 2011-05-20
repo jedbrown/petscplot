@@ -87,7 +87,8 @@ def tokenize(str):
     'str -> Sequence(Token)'
     MSpec = lambda t,r: Spec(t,r,re.MULTILINE)
     specs = [
-        MSpec('level', r'^Level \d+.*$'),
+        MSpec('level', r'^fine grid is \d+.*$'),
+        MSpec('residual_header', r'^residual norm \d+.*$'),
         MSpec('snes_monitor', r'^\s+\d+ SNES Function norm.*$'),
         MSpec('snes_converged', r'^\s*Nonlinear solve converged due to \w+$'),
         MSpec('snes_diverged', r'^\s*Nonlinear solve did not converge due to \w+$'),
@@ -120,10 +121,10 @@ def parse(seq):
         within_space = lambda m: r'\s*'+m+r'\s*'
         cfloat, cint = map(lambda m: within_space(capture(m)),[rfloat,rint])
         x = within_space('x')
-        m = re.match('Level'+cint+r'domain size \(m\)'+cfloat+x+cfloat+x+cfloat
-                     +', num elements'+cint+x+cint+x+cint+r'\('+cint
-                     +r'\), size \(m\)'+cfloat+x+cfloat+x+cfloat, s)
-        return Level(*m.groups())
+        m = re.match('fine grid is '+cint+' x '+cint, s)
+        M, N = map(int,m.groups())
+        L = log2((M-1) / 1024)
+        return Level(0,1.,1.,1.,M,N,1,M*N,1/M,1/N,1.)
     def mkSNESIt(s):
         resline, ksp = s[0], s[1]
         res = float(resline.strip().split()[4])
@@ -177,7 +178,7 @@ def parse(seq):
     option_table = skip(sometok('option_table_begin')) + many(option_table_entry) + skip(sometok('option_table_end')) >> dict
     host = sometok('hostline') >> mkHost
     log_summary = skip(sometok('summary_begin')) + host + many(stage) + skip(memory_usage) + option_table >> unarg(LogSummary)
-    petsc_log = many(level) + many(snes) + maybe(log_summary) + skip(finished) >> unarg(mkRun)
+    petsc_log = many(level) + skip(sometok('residual_header')) + many(snes) + log_summary + skip(finished) >> unarg(mkRun)
     return petsc_log.parse(seq)
 
 def read_file(fname):
