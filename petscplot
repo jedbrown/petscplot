@@ -269,7 +269,7 @@ def plot_snes_convergence(solves, sequence=False, withksp=False, legend_loc='low
                 x = offset+k+kres[:,0]/(kres.shape[0]-1)
                 semilogy(x,kres[:,1],'k:x',label=None)
         if sequence: offset += res.shape[0]-1
-    ylabel('Nonlinear residual')
+    ylabel('Residual')
     xlabel('Newton iteration')
     legend(loc=legend_loc)
 
