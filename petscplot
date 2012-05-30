@@ -127,7 +127,7 @@ def parse(seq):
     def mkSNESIt(s):
         resline, ksp = s[0], s[1]
         res = float(resline.strip().split()[4])
-        indent = len(re.match(r'^( *)(?:  | \d|\d\d)\d', resline).groups()[0])/2
+        indent = len(re.match(r'^( *)(?:  | \d|\d\d)\d', resline).groups()[0]) // 2
         return SNESIt(indent,res,ksp)
     def mkKSPIt(s):
         return float(s.strip().split()[4])
